@@ -12,6 +12,7 @@ use MIME::Base64;
 use Encode;
 use Term::ANSIColor qw(:constants);
 use POSIX qw(strftime);
+use LWP::UserAgent;
 
 use vars qw(%gradeDB %dictDB %testDB %examDB $k $v) ;
 
@@ -61,8 +62,21 @@ sub ExtractWord {
     my %result = ();
     $result{w} = $word;
 
-    my $rawHTML = get($url);
-    die "LWP::Simple messed up $!" unless ($rawHTML);
+    my $ua = LWP::UserAgent->new;
+    $ua->timeout(10);
+    $ua->env_proxy;
+    $ua->agent("Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/64.0.3282.168 Safari/537.36");
+    $ua->default_headers->push_header('Accept-Language' => "zh-CN,zh;q=0.9");
+    $ua->default_headers->push_header('Accept-Encoding' => "deflate");
+    $ua->default_headers->push_header('Accept' => "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8");
+    $ua->default_headers->push_header('Accept-Charset' => "UTF-8");
+    my $response = $ua->get($url);
+    if (!$response->is_success) {
+        print $response->status_line, "\n";
+        undef;
+        return;
+    }
+    my $rawHTML = decode_utf8($response->content);
 
     my $tp = HTML::TokeParser->new(\$rawHTML) || die "Can't open: $!";
 
@@ -96,9 +110,13 @@ sub ExtractWord {
                     }
                 }
                 elsif ($tag eq "div") {
-                    $class = $attr->{'class'} or next;
-                    if ($class eq "trans-container") {
+                    $class = $attr->{'class'} ;
+                    my $id = $attr->{'id'}; 
+                    if (defined $class and $class eq "trans-container") {
                         $step = 3;
+                    }
+                    elsif (defined $id and $id eq "examplesToggle") {
+                        $step = 5;
                     }
                 }
             }
@@ -228,7 +246,7 @@ sub ExtractWord {
         }
     }
     $result{w2} = uri_escape($word);
-    if (defined $result{trans}) {
+    if (defined $result{trans} or defined $result{demos}) {
         return \%result;
     }
     undef;
