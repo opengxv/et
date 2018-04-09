@@ -26,6 +26,7 @@ my $curWord;
 my $curExam;
 my $term;
 my @testList = ();
+my $curTT;
 
 sub PrintErr {
     my $msg = shift @_;
@@ -57,6 +58,17 @@ sub DecodeST {
 
 sub ExtractWord {
     my $word = shift @_;
+    my $ext;
+    my $stop_trans;
+    if ($word =~ /([^\|]+)\|(.+)/) {
+        $word = $1;
+        $ext = $2;
+    }
+    elsif ($word =~ /([^\\]+)\\(.+)/) {
+        $word = $1;
+        $ext = $2;
+        $stop_trans = 1;
+    }
     $word =~ s/^\s+|\s+$//g;
     my $url = "http://dict.youdao.com/w/eng/$word/#keyfrom=dict2.index";
     my %result = ();
@@ -89,7 +101,12 @@ sub ExtractWord {
     my $pcount;
     my $span = 0;
     my $demo;
-    my $stop_trans;
+
+    if (defined $ext) {
+        my @trans = ();
+        push @trans, decode_utf8($ext);
+        $result{trans} = \@trans;
+    }
     while (my $token = $tp->get_token) {
         my $class;
         my $ttype = shift @{ $token };
@@ -809,6 +826,79 @@ sub CheckExam {
     }
 }
 
+my @tts = ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+           ' ', ',', '.', ';', "'");
+my @ttf = ('e', 'b', 'c', 'c', 'c', 'b', 'b', 'B', 'C', 'B', 'C', 'D', 'B', 'B', 'D', 'E', 'e', 'b', 'd', 'b', 'B', 'b', 'd', 'd', 'B', 'e',
+           'a', 'C', 'D', 'E', 'E');
+sub MakeTT {
+    system 'clear';
+    my @list1 = ();
+    my @list2 = ();
+    my $i = 0;
+    while (1) {
+        if (!defined $tts[$i]) {
+            last;
+        }
+        push(@list1, $tts[$i]);
+        push(@list2, $ttf[$i]);
+        $i = $i + 1;
+    }
+    srand(time());
+    my $step = 0;
+    my $ks = "";
+    my $fs = "";
+    my $fk;
+    my $ff;
+    my $lk;
+    my $lf;
+    while ($i > 0) {
+        my $index = int(rand($i));
+        if ($index < 0) {
+            $index = 0;
+        }
+        if ($index >= $i) {
+            $index = $i - 1;
+        }
+
+        if ((!defined $fk or !defined $lk) and $list1[$index] eq " ") {
+            next;
+        }
+        
+        if (!defined $fk) {
+            $fk = $list1[$index];
+            $ff = $list2[$index];
+        }
+        elsif (!defined $lk) {
+            $lk = $list1[$index];
+            $lf = $list2[$index];
+        }
+        else {
+            $ks = $ks . $list1[$index];
+            $fs = $fs . $list2[$index];
+        }
+
+        if ($index != $i - 1) {
+            $list1[$index] = $list1[$i - 1];
+            $list2[$index] = $list2[$i - 1];
+        }
+        $i = $i - 1;
+    }
+    
+    $curTT = "$fk$ks$lk";
+    print "    $fk$ks$lk\n";
+    print "    $ff$fs$lf\n";
+}
+
+sub CheckTT {
+    my $txt = shift @_;
+    if ($txt ne $curTT) {
+        PrintErr("The input is wrong.\n");
+    }
+    else {
+        MakeTT();
+    }
+}
+
 sub Exit {
     exit;
 }
@@ -838,6 +928,22 @@ sub HandleSave {
     if (defined $curWord) {
         SaveToDB($curWord);
         SaveSound($curWord);
+        print "Save '$curWord->{w}', id is '$curWord->{id}'.\n";
+
+        my $tmp = $curWord;
+        undef $curWord;
+        return $tmp;
+    }
+    print "No word to save.\n";
+    undef;
+}
+
+sub HandleReplace {
+    my $id = shift @_;
+    if (defined $curWord) {
+        SaveToDB($curWord);
+        SaveSound($curWord);
+        HandleDelete($id);
         print "Save '$curWord->{w}', id is '$curWord->{id}'.\n";
 
         my $tmp = $curWord;
@@ -900,6 +1006,20 @@ sub HandleList {
     }
     elsif ($who eq "today") {
         my $today = GetDay();
+        my $i = 1;
+        while ($i <= $maxId) {
+            if (defined $wordList[$i]) {
+                my $ct = $wordList[$i]->{ct};
+                if ($ct == $today) {
+                    print "$i\t$wordList[$i]->{w}\n";
+                    $count = $count + 1;
+                }
+            }
+            $i = $i + 1;
+        }
+    }
+    elsif ($who =~ /-[0-9]+/) {
+        my $today = GetDay() + $who;
         my $i = 1;
         while ($i <= $maxId) {
             if (defined $wordList[$i]) {
@@ -1013,7 +1133,12 @@ sub HandleCmd {
     }
 
     if ($cmd eq "quit") {
-        Exit;
+        if (defined $curTT) {
+            undef $curTT;
+        }
+        else {
+            Exit;
+        }
     }
     elsif ($cmd eq "load") {
         HandleLoad(@args);
@@ -1029,6 +1154,9 @@ sub HandleCmd {
     }
     elsif ($cmd eq "delete") {
         HandleDelete(@args);
+    }
+    elsif ($cmd eq "replace") {
+        HandleReplace(@args);
     }
     elsif ($cmd eq "test") {
         HandleTest(@args);
@@ -1047,6 +1175,9 @@ sub HandleCmd {
     }
     elsif (defined $curExam && $cmd eq "cancel") {
         undef $curExam;
+    }
+    elsif ($cmd eq "tt") {
+        MakeTT();
     }
     else {
         print "Unknown command '$cmd'.\n";
@@ -1103,7 +1234,10 @@ while (my ($k, $v) = each %testDB) {
 $term = Term::ReadLine->new('rewords');
 while (1) {
     my $prompt = "> ";
-    if (defined $curExam) {
+    if (defined $curTT) {
+        $prompt = "TT> ";
+    }
+    elsif (defined $curExam) {
         $prompt = "Exam[$curExam->{ec}]> ";
     }
     if (defined ($_ = $term->readline($prompt))) {
@@ -1120,7 +1254,13 @@ while (1) {
             $args =~ s/^\s+|\s+$//g;
             HandleCmd($cmd, $args);
         }
-        elsif (!defined $curExam) {
+        elsif (defined $curExam) {
+            CheckExam(NormWord($cmd));
+        }
+        elsif (defined $curTT) {
+            CheckTT($cmd);
+        }
+        else {
             my $s = NormWord($cmd);
             my $word = $dict{$s};
             undef $curWord;
@@ -1131,9 +1271,6 @@ while (1) {
                 PrintWord($word);
                 $curWord = $word;
             }
-        }
-        else {
-            CheckExam(NormWord($cmd));
         }
         $term->addhistory($cmd);
     }
