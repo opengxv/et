@@ -104,7 +104,7 @@ sub ExtractWord {
 
     if (defined $ext) {
         my @trans = ();
-        push @trans, decode_utf8($ext);
+        push @trans, $ext;
         $result{trans} = \@trans;
     }
     while (my $token = $tp->get_token) {
@@ -262,7 +262,7 @@ sub ExtractWord {
             }
         }
     }
-    $result{w2} = uri_escape($word);
+    $result{w2} = uri_escape_utf8($word);
     if (defined $result{trans} or defined $result{demos}) {
         return \%result;
     }
@@ -885,7 +885,7 @@ sub MakeTT {
     }
     
     $curTT = "$fk$ks$lk";
-    print "    $fk$ks$lk\n";
+    print BOLD, GREEN, "    $fk$ks$lk", RESET, "\n";
     print "    $ff$fs$lf\n";
 }
 
@@ -1242,6 +1242,7 @@ while (1) {
     }
     if (defined ($_ = $term->readline($prompt))) {
         my $cmd = $_;
+        $cmd = decode_utf8($cmd);
         $cmd =~ s/^\s+|\s+$//g;
 
         if ($cmd eq "") {
