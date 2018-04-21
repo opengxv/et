@@ -11,7 +11,7 @@ use HTML::TokeParser;
 use MIME::Base64;
 use Encode;
 use Term::ANSIColor qw(:constants);
-use POSIX qw(strftime);
+use POSIX qw(strftime round);
 use LWP::UserAgent;
 
 use vars qw(%gradeDB %dictDB %testDB %examDB $k $v) ;
@@ -53,6 +53,12 @@ sub DecodeST {
             }
         }
     }
+    return $txt;
+}
+
+sub DecodeXML {
+    my $txt = shift @_;
+    $txt =~ s/&#39;/\'/g;
     return $txt;
 }
 
@@ -240,6 +246,7 @@ sub ExtractWord {
                     if ($txt =~ /以上为机器翻译结果，长、整句建议使用/) {
                         $stop_trans = 1;
                     }
+                    $txt = DecodeXML($txt);
                     if (!defined $stop_trans) {
                         if ($txt =~ /^\[/) {
                             $result{st} = DecodeST($txt)
@@ -314,8 +321,8 @@ sub PrintWord {
 
 sub EscXmlStr {
     my $str = shift @_;
-    $str =~ s/\</＆lt;/g;
-    $str =~ s/\>/＆gt;/g;
+    $str =~ s/\</&lt;/g;
+    $str =~ s/\>/&gt;/g;
     $str =~ s/\&/&amp;/g;
     $str =~ s/\'/&apos;/g;
     $str =~ s/\"/&quot;/g;
@@ -622,8 +629,11 @@ sub PrintExam {
         print GREEN;
         while (my($index, $txt) = each @{$word->{trans}}){
             $txt = lc($txt);
-            $txt =~ s/$word->{w}//g;
-            print "$txt\n";
+            $txt = DecodeXML($txt);
+            if ($txt ne $word->{w}) {
+                $txt =~ s/$word->{w}//g;
+                print "$txt\n";
+            }
         }
         print RESET, "\n";
     }
@@ -924,6 +934,20 @@ sub HandleLoad {
     return $word;
 }
 
+sub HandleSearch {
+    my $txt = shift @_;
+
+    my $i = 1;
+    while ($i <= $maxId) {
+        if (defined $wordList[$i]) {
+            if ($wordList[$i]->{w} =~ /$txt/) {
+                print "$i\t$wordList[$i]->{w}\n";
+            }
+        }
+        $i = $i + 1;
+    }
+}
+
 sub HandleSave {
     if (defined $curWord) {
         SaveToDB($curWord);
@@ -1151,6 +1175,9 @@ sub HandleCmd {
     }
     elsif ($cmd eq "list") {
         HandleList(@args);
+    }
+    elsif ($cmd eq "search") {
+        HandleSearch(@args);
     }
     elsif ($cmd eq "delete") {
         HandleDelete(@args);
