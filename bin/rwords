@@ -981,7 +981,10 @@ sub HandleReplace {
 sub HandlePrint {
     my $txt = shift @_;
     my $word;
-    if ($txt =~ /^[0-9]+$/) {
+    if (!defined $txt) {
+        $word = $curWord;
+    }
+    elsif ($txt =~ /^[0-9]+$/) {
         $word = $wordList[$txt];
     }
     else {
@@ -1057,6 +1060,35 @@ sub HandleList {
         }
     }
     print "total is $count.\n";
+}
+
+sub HandleRC {
+    my $txt = shift @_;
+    if (!defined $txt or $txt eq "") {
+        return;
+    }
+    if (!defined $curWord) {
+        return;
+    }
+    my @trans = ($txt);
+    $curWord->{trans} = \@trans;
+    PrintWord($curWord);
+}
+
+sub HandleAC {
+    my $txt = shift @_;
+    if (!defined $txt or $txt eq "") {
+        return;
+    }
+    if (!defined $curWord) {
+        return;
+    }
+    my @trans = ($txt);
+    if (defined $curWord->{trans}) {
+        push @trans, @{$curWord->{trans}};
+    }
+    $curWord->{trans} = \@trans;
+    PrintWord($curWord);
 }
 
 sub HandleDelete {
@@ -1206,6 +1238,12 @@ sub HandleCmd {
     elsif ($cmd eq "tt") {
         MakeTT();
     }
+    elsif ($cmd eq "rc") {
+        HandleRC(@args);
+    }
+    elsif ($cmd eq "ac") {
+        HandleAC(@args);
+    }
     else {
         print "Unknown command '$cmd'.\n";
     }
@@ -1213,8 +1251,10 @@ sub HandleCmd {
 
 my $env = new BerkeleyDB::Env
     -Home   => $dataDir,
+    -Cachesize => 1024 * 1024 * 1024,
     -Flags  => DB_CREATE| DB_INIT_CDB | DB_INIT_MPOOL
 or die "cannot open environment: $BerkeleyDB::Error\n";
+
 
 tie (%dictDB, "BerkeleyDB::Hash",
     -Filename => 'dict.db',
