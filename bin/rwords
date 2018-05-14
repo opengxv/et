@@ -693,7 +693,7 @@ sub CalcExam {
                 $word->{g} = 0;
             }
 
-            if ($word->{g} >= 3) {
+            if ($word->{g} >= 2) {
                 if ($word->{r} == 0) {
                     $word->{i} = 1;
                     $word->{r} = 1;
