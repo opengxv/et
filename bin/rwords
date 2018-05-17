@@ -1045,6 +1045,28 @@ sub HandleList {
             $i = $i + 1;
         }
     }
+    elsif ($who eq "td") {
+        my $today = GetDay();
+        my $i = 1;
+        while ($i <= $maxId) {
+            if (defined $wordList[$i]) {
+                my $ct = $wordList[$i]->{ct};
+                if ($ct == $today) {
+                    my $word = $wordList[$i];
+                    print "$i\t$word->{w}\n";
+                    if (defined $word->{trans}) {
+                        while (my($index, $txt) = each @{$word->{trans}}){
+                            if ($word->{w} ne "$txt") {
+                                print "\t$txt\n";
+                            }
+                        }
+                    }
+                    $count = $count + 1;
+                }
+            }
+            $i = $i + 1;
+        }
+    }
     elsif ($who =~ /-[0-9]+/) {
         my $today = GetDay() + $who;
         my $i = 1;
