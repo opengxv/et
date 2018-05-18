@@ -18,6 +18,7 @@ use vars qw(%gradeDB %dictDB %testDB %examDB $k $v) ;
 
 my $homeDir = $ENV{RWORDS};
 my $dataDir = "$homeDir/data";
+my $tmpDir = "$homeDir/tmp";
 my %dict = ();
 my @wordList = ();
 my $maxId = 0;
@@ -27,6 +28,7 @@ my $curExam;
 my $term;
 my @testList = ();
 my $curTT;
+my $pid;
 
 sub PrintErr {
     my $msg = shift @_;
@@ -1048,6 +1050,8 @@ sub HandleList {
     elsif ($who eq "td") {
         my $today = GetDay();
         my $i = 1;
+        my $tmp = "$tmpDir/$pid";
+        #open(F, ">$tmp");
         while ($i <= $maxId) {
             if (defined $wordList[$i]) {
                 my $ct = $wordList[$i]->{ct};
@@ -1056,7 +1060,7 @@ sub HandleList {
                     print "$i\t$word->{w}\n";
                     if (defined $word->{trans}) {
                         while (my($index, $txt) = each @{$word->{trans}}){
-                            if ($word->{w} ne "$txt") {
+                            if (!($word->{w} =~ /$txt/)) {
                                 print "\t$txt\n";
                             }
                         }
@@ -1066,6 +1070,11 @@ sub HandleList {
             }
             $i = $i + 1;
         }
+        #close(F);
+        #my $cmd = "/bin/bash -c \"/usr/bin/view $tmp\"";
+        #print "$cmd\n";
+        #`$cmd`;
+        #`rm $tmp`;
     }
     elsif ($who =~ /-[0-9]+/) {
         my $today = GetDay() + $who;
@@ -1320,6 +1329,7 @@ while (my ($k, $v) = each %testDB) {
     }
 }
 
+$pid = $$;
 $term = Term::ReadLine->new('rewords');
 while (1) {
     my $prompt = "> ";
