@@ -530,7 +530,7 @@ sub NormWord {
 }
 
 sub GetDay {
-    return int(time() / (60 * 60 * 24));
+    return int((time() / (60 * 60 * 24) * 100)) / 100;
 }
 
 sub FmtDay {
@@ -599,7 +599,7 @@ sub CreateExam {
     while ($i <= $maxId) {
         if (defined $wordList[$i]) {
             my $word = $wordList[$i];
-            if (($train == 0 && ($word->{g} < 3 || $word->{nt} <= $today || $word->{tt} == $today)) ||
+            if (($train == 0 && ($word->{g} < 3 || FmtDay($word->{nt}) le $today || FmtDay($word->{tt}) eq $txtoday)) ||
                 ($train == 1 && $word->{tt} == 0) ||
                 ($train == 2 && FmtDay($word->{ct}) eq $txtoday)) {
                 $count = $count + 1;
@@ -1060,11 +1060,11 @@ sub HandleList {
         }
     }
     elsif ($who eq "today") {
-        my $today = GetDay();
+        my $today = FmtDay();
         my $i = 1;
         while ($i <= $maxId) {
             if (defined $wordList[$i]) {
-                my $ct = $wordList[$i]->{ct};
+                my $ct = FmtDay($wordList[$i]->{ct});
                 if ($ct == $today) {
                     print "$i\t$wordList[$i]->{w}\n";
                     $count = $count + 1;
@@ -1074,12 +1074,12 @@ sub HandleList {
         }
     }
     elsif ($who eq "td") {
-        my $today = GetDay();
+        my $today = FmtDay();
         my $i = 1;
         CreateTmp();
         while ($i <= $maxId) {
             if (defined $wordList[$i]) {
-                my $ct = $wordList[$i]->{ct};
+                my $ct = FmtDay($wordList[$i]->{ct});
                 if ($ct == $today) {
                     my $word = $wordList[$i];
                     print F "$i\t$word->{w}\n";
