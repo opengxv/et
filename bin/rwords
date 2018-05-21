@@ -13,6 +13,7 @@ use Encode;
 use Term::ANSIColor qw(:constants);
 use POSIX qw(strftime round);
 use LWP::UserAgent;
+use Time::Local;
 
 use vars qw(%gradeDB %dictDB %testDB %examDB $k $v) ;
 
@@ -344,6 +345,17 @@ sub PrintWord {
             }
         }
     }
+
+    if (defined $word->{ct}) {
+        my $ct = $word->{ct};
+        my $g = $word->{g};
+        my $ii = $word->{i};
+        my $r = $word->{r};
+        my $e = $word->{e};
+        my $nt = $word->{nt};
+        my $tt = $word->{tt};
+        print "ct=$ct g=$g nt=$nt i=$ii r=$r e=$e tt=$tt\n";
+    }
     PlaySound($word);
 }
 
@@ -530,21 +542,18 @@ sub NormWord {
 }
 
 sub GetDay {
-    return int((time() / (60 * 60 * 24) * 100)) / 100;
+    return int(strftime("%y%m%d", localtime(time())));
 }
 
-sub FmtDay {
-    my $d = shift @_;
-    if (defined $d) {
-        if ($d == 0) {
-            return "000000";
-        }
-        $d = $d * 3600 * 24;
-    }
-    else {
-        $d = time();
-    }
-    return strftime("%y%m%d", localtime($d));
+sub AddDay {
+    my $day = shift;
+    my $n = shift;
+    my $y = int($day / 10000);
+    my $m = int(($day % 10000) / 100) - 1;
+    my $d = $day % 100;
+
+    my $t = timelocal(0, 0, 12, $d, $m, $y);
+    return int(strftime("%y%m%d", localtime($t + (3600 * 24 * $n))));
 }
 
 sub LoadWord {
@@ -589,7 +598,6 @@ sub CreateExam {
     my $i = 1;
     my $count = 0;
     my $today = GetDay();
-    my $txtoday = FmtDay($today);
     my %result = ();
 
     if (!defined $train) {
@@ -599,9 +607,9 @@ sub CreateExam {
     while ($i <= $maxId) {
         if (defined $wordList[$i]) {
             my $word = $wordList[$i];
-            if (($train == 0 && (FmtDay($word->{nt}) le $txtoday || FmtDay($word->{tt}) eq $txtoday)) ||
+            if (($train == 0 && ($word->{g} <= 2 || $word->{nt} <= $today || $word->{tt} == $today)) ||
                 ($train == 1 && $word->{tt} == 0) ||
-                ($train == 2 && FmtDay($word->{ct}) eq $txtoday)) {
+                ($train == 2 && $word->{ct} == $today)) {
                 $count = $count + 1;
                 push @list, $word;
             }
@@ -610,23 +618,23 @@ sub CreateExam {
     }
 
     srand(time());
-    $i = $count;
     my @list2 = ();
-    while ($i > 0) {
-        my $index = int(rand($i));
+    while (1) {
+        my $size = @list;
+        if ($size < 1) {
+            last;
+        }
+        my $index = int(rand($size));
         if ($index < 0) {
             $index = 0;
         }
-        if ($index >= $i) {
-            $index = $i - 1;
+        if ($index >= $size) {
+            $index = $size - 1;
         }
 
         my $word = $list[$index];
-        if ($index != $i - 1) {
-            $list[$index] = $list[$i - 1];
-        }
+        splice(@list, $index, 1);
         push @list2, $word;
-        $i = $i - 1;
     }
 
     my @list3 = ();
@@ -698,13 +706,13 @@ sub PrintExamList {
 
 sub CalcExam {
     my @ec = (0, 0, 0, 0);
-    my $day = FmtDay();
+    my $day = GetDay();
     my $txtExam = "";
     while (my $r = shift @{$curExam->{result}}) {
         $ec[$r->{ec}] = $ec[$r->{ec}] + 1;
         my $word = $r->{w};
         $txtExam = "$txtExam$word->{w}|$r->{ec}|$r->{time}\n";
-        if (FmtDay($word->{tt}) ge $day) {
+        if ($word->{tt} >= $day) {
             next;
         }
 
@@ -720,7 +728,9 @@ sub CalcExam {
             else {
                 $word->{g} = 0;
                 $word->{r} = 0;
-                $word->{i} = 1;
+                $word->{i} = 0;
+                $word->{e} = 2.5;
+                $word->{nt} = 0;
             }
 
             if ($word->{g} >= 2) {
@@ -742,12 +752,15 @@ sub CalcExam {
                 $word->{i} = 1;
             }
 
-            $word->{e} = $word->{e} + (0.1 - (5 - $word->{g}) * (0.08 + (5 - $word->{g}) * 0.02));
-            if ($word->{e} < 1.3) {
-                $word->{e} = 1.3;
+            if ($word->{g} > 0) {
+                $word->{e} = $word->{e} + (0.1 - (5 - $word->{g}) * (0.08 + (5 - $word->{g}) * 0.02));
+
+                if ($word->{e} < 1.3) {
+                    $word->{e} = 1.3;
+                }
             }
 
-            $word->{nt} = $day + $word->{i};
+            $word->{nt} = AddDay($day, $word->{i});
             $word->{tt} = $day;
             SaveGrade($word);
         }
@@ -1038,13 +1051,13 @@ sub HandleList {
         my $i = 1;
         while ($i <= $maxId) {
             if (defined $wordList[$i]) {
-                my $ct = FmtDay($wordList[$i]->{ct});
+                my $ct = $wordList[$i]->{ct};
                 my $g = $wordList[$i]->{g};
                 my $ii = $wordList[$i]->{i};
                 my $r = $wordList[$i]->{r};
                 my $e = $wordList[$i]->{e};
-                my $nt = FmtDay($wordList[$i]->{nt});
-                my $tt = FmtDay($wordList[$i]->{tt});
+                my $nt = $wordList[$i]->{nt};
+                my $tt = $wordList[$i]->{tt};
                 print "$i\t$wordList[$i]->{w} ct=$ct g=$g nt=$nt i=$ii r=$r e=$e tt=$tt\n";
                 $count = $count + 1;
             }
@@ -1062,11 +1075,11 @@ sub HandleList {
         }
     }
     elsif ($who eq "today") {
-        my $today = FmtDay();
+        my $today = GetDay();
         my $i = 1;
         while ($i <= $maxId) {
             if (defined $wordList[$i]) {
-                my $ct = FmtDay($wordList[$i]->{ct});
+                my $ct = $wordList[$i]->{ct};
                 if ($ct == $today) {
                     print "$i\t$wordList[$i]->{w}\n";
                     $count = $count + 1;
@@ -1076,12 +1089,12 @@ sub HandleList {
         }
     }
     elsif ($who eq "td") {
-        my $today = FmtDay();
+        my $today = GetDay();
         my $i = 1;
         CreateTmp();
         while ($i <= $maxId) {
             if (defined $wordList[$i]) {
-                my $ct = FmtDay($wordList[$i]->{ct});
+                my $ct = $wordList[$i]->{ct};
                 if ($ct == $today) {
                     my $word = $wordList[$i];
                     print F "$i\t$word->{w}\n";
@@ -1225,6 +1238,53 @@ sub HandleToday {
     PrintExam();
 }
 
+sub HandleTestWords {
+    my $exam = CreateExam();
+    my $i = 1;
+    while (1) {
+        my $word = $exam->{list}->[$i];
+        if (!defined $word) {
+            last;
+        }
+        my $ct = $word->{ct};
+        my $g = $word->{g};
+        my $ii = $word->{i};
+        my $r = $word->{r};
+        my $e = $word->{e};
+        my $nt = $word->{nt};
+        my $tt = $word->{tt};
+        print "$i\t$word->{w} ct=$ct g=$g nt=$nt i=$ii r=$r e=$e tt=$tt\n";
+        $i = $i + 1;
+    }
+    print "$exam->{count} $i\n"; 
+}
+
+sub MTime {
+    my $t = shift;
+    $t = strftime("%y%m%d", localtime($t * 3600 * 24));
+    return int($t);
+}
+
+sub HandleMigrate {
+=pod
+    my $i = 1;
+    while ($i <= $maxId) {
+        if (defined $wordList[$i]) {
+            my $word = $wordList[$i];
+            $word->{ct} = MTime($word->{ct});
+            $word->{nt} = MTime($word->{nt});
+            $word->{tt} = MTime($word->{tt});
+            SaveGrade($word);
+            SaveToDB($word);
+            if ($word->{nt} > 180530) {
+                print "$i\n";
+            }
+        }
+        $i = $i + 1;
+    }
+=cut
+}
+
 sub HandleCmd {
     my $cmd = shift @_;
     my $argstr = shift @_;
@@ -1301,6 +1361,12 @@ sub HandleCmd {
     }
     elsif ($cmd eq "ac") {
         HandleAC(@args);
+    }
+    elsif ($cmd eq "testwords") {
+        HandleTestWords(@args);
+    }
+    elsif ($cmd eq "migrate") {
+        HandleMigrate(@args);
     }
     else {
         print "Unknown command '$cmd'.\n";
