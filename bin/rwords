@@ -599,7 +599,7 @@ sub CreateExam {
     while ($i <= $maxId) {
         if (defined $wordList[$i]) {
             my $word = $wordList[$i];
-            if (($train == 0 && ($word->{g} < 3 || FmtDay($word->{nt}) le $today || FmtDay($word->{tt}) eq $txtoday)) ||
+            if (($train == 0 && (FmtDay($word->{nt}) le $txtoday || FmtDay($word->{tt}) eq $txtoday)) ||
                 ($train == 1 && $word->{tt} == 0) ||
                 ($train == 2 && FmtDay($word->{ct}) eq $txtoday)) {
                 $count = $count + 1;
@@ -698,13 +698,13 @@ sub PrintExamList {
 
 sub CalcExam {
     my @ec = (0, 0, 0, 0);
-    my $day = GetDay();
+    my $day = FmtDay();
     my $txtExam = "";
     while (my $r = shift @{$curExam->{result}}) {
         $ec[$r->{ec}] = $ec[$r->{ec}] + 1;
         my $word = $r->{w};
         $txtExam = "$txtExam$word->{w}|$r->{ec}|$r->{time}\n";
-        if ($word->{tt} >= $day) {
+        if (FmtDay($word->{tt}) ge $day) {
             next;
         }
 
@@ -719,6 +719,8 @@ sub CalcExam {
             }
             else {
                 $word->{g} = 0;
+                $word->{r} = 0;
+                $word->{i} = 1;
             }
 
             if ($word->{g} >= 2) {
