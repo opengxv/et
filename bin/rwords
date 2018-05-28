@@ -543,6 +543,24 @@ sub NormWord {
     return $word;
 }
 
+sub NormItem {
+    my $txt = shift @_;
+    $txt =~ s/it's/it is/g;
+    $txt =~ s/she's/it is/g;
+    $txt =~ s/he's/it is/g;
+    $txt =~ s/i'am/i am/g;
+    $txt =~ s/they're/they are/g;
+    $txt =~ s/you're/you are/g;
+    $txt =~ s/isn't/is not/g;
+    $txt =~ s/aren't/are not/g;
+    $txt =~ s/don't/do not/g;
+    $txt =~ s/doesn't/does not/g;
+    $txt =~ s/can't/can not/g;
+
+    return $txt;
+}
+
+
 sub GetDay {
     return int(strftime("%y%m%d", localtime(time())));
 }
@@ -863,7 +881,7 @@ sub CheckExam {
             return;
         }
         my $word = $curExam->{list}->[$curExam->{cur}];
-        if ($txt eq lc($word->{w})) {
+        if (NormItem($txt) eq NormItem(lc($word->{w}))) {
             NextWord();
         }
         else {
