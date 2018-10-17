@@ -508,10 +508,13 @@ sub GetSoundPath {
 
 sub SaveSound {
     my $word = shift @_;
+    my $filename = shift @_;
     my $s = substr($word->{w}, 0, 1);
     my $s2 = uri_escape($word->{w});
     my $path = "$homeDir/sound/$s";
-    my $filename = "$path/$s2.mp3";
+    if (!defined $filename) {
+        $filename = "$path/$s2.mp3";
+    }
     my $url = "http://dict.youdao.com/dictvoice?audio=$word->{w2}&type=1";
     `mkdir -p "$path"`;
     `wget -q -O "$filename" "$url"`;
@@ -529,9 +532,13 @@ sub PlaySound {
         }
     }
     else {
-        my $url = "http://dict.youdao.com/dictvoice?audio=$word->{w2}&type=1";
-        my $cmd = "mpg123 -q \"$url\"";
-        `$cmd`;
+        my $fname = "$tmpDir/audio.mp3";
+        SaveSound($word, $fname);
+        #my $url = "http://dict.youdao.com/dictvoice?audio=$word->{w2}&type=1";
+        #my $cmd = "mpg123 -q \"$url\"";
+        #`$cmd`;
+        `mpg123 -q "$fname"`;
+        unlink($fname);
     }
 }
 
