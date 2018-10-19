@@ -674,6 +674,7 @@ sub CreateExam {
     $result{cur} = 0;
     $result{ec} = 0;
     $result{result} = \@list3;
+    $result{day} = $today;
     if ($train != 0) {
         $result{tmp} = 1;
     }
@@ -735,7 +736,7 @@ sub PrintExamList {
 
 sub CalcExam {
     my @ec = (0, 0, 0, 0);
-    my $day = GetDay();
+    my $day = $curExam->{day};
     my $txtExam = "";
     while (my $r = shift @{$curExam->{result}}) {
         $ec[$r->{ec}] = $ec[$r->{ec}] + 1;
