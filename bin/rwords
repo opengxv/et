@@ -16,6 +16,7 @@ use Term::ANSIColor qw(:constants);
 use POSIX qw(strftime round);
 use LWP::UserAgent;
 use Time::Local;
+use File::Lockfile;
 
 use vars qw(%gradeDB %dictDB %testDB %examDB $k $v) ;
 
@@ -33,6 +34,34 @@ my @testList = ();
 my $curTT;
 my $pid;
 my $tmpfile;
+my $question = "？";
+
+my $lockfile = File::Lockfile->new("lockfile", $tmpDir);
+if (my $pid = $lockfile->check) {
+    print "rwords is locked.\n";
+    exit;
+}
+
+sub LockRwords {
+    my @list = `ps -ef | grep rwords`;
+    my $i = 0;
+    while (my $txt = shift @list) {
+       chop($txt);
+       if ($txt =~ /perl/) {
+           $i = $i + 1;
+       }
+    }
+    if ($i > 1) {
+        print "too many rwords.\n";
+        return 0;
+    }
+    $lockfile->write;
+    return 1;
+}
+
+sub UnlockRwords {
+    $lockfile->remove;
+}
 
 sub ExecView {
     my $pid = fork();
@@ -335,15 +364,16 @@ sub PrintWord {
         }
         print "\n";
     }
-
     if (defined $word->{st}) {
         print $word->{st}, "\n\n";
     }
     if (defined $word->{demos}) {
+	my $i = 1;
         while (my($index, $demo) = each @{$word->{demos}}){
             if (defined $demo->[1] && defined $demo->[2]) {
-                print "$demo->[1]\n";
+                print "[$i] $demo->[1]\n";
                 print "$demo->[2]\n\n";
+                $i = $i + 1;
             }
         }
     }
@@ -510,7 +540,7 @@ sub SaveSound {
     my $word = shift @_;
     my $filename = shift @_;
     my $s = substr($word->{w}, 0, 1);
-    my $s2 = uri_escape($word->{w});
+    my $s2 = uri_escape_utf8($word->{w});
     my $path = "$homeDir/sound/$s";
     if (!defined $filename) {
         $filename = "$path/$s2.mp3";
@@ -592,6 +622,19 @@ sub LoadWord {
         return;
     }
     return ExtractWord($word);
+}
+
+sub LookWord {
+    my $s = NormWord(shift @_);
+    my $word = $dict{$s};
+    undef $curWord;
+    if (!defined $word) {
+        $word = LoadWord($s);
+    }
+    if ($word) {
+        PrintWord($word);
+        $curWord = $word;
+    }
 }
 
 sub LoadGrade {
@@ -679,6 +722,11 @@ sub CreateExam {
         $result{tmp} = 1;
     }
     return \%result;
+}
+
+sub CloseExam {
+    undef $curExam;
+    UnlockRwords;
 }
 
 sub PrintExam {
@@ -877,7 +925,7 @@ sub NextWord {
     else {
         CalcExam();
         print "The exam is finished.\n";
-        undef $curExam;
+        CloseExam;
     }
 }
 
@@ -1163,6 +1211,40 @@ sub HandleList {
     print "total is $count.\n";
 }
 
+sub HandleReplaceItem {
+    my $txt = shift @_;
+    if (!defined $txt or $txt eq "") {
+        return;
+    }
+    if ($txt == 0) {
+	return;
+    }
+    if (!defined $curWord) {
+        return;
+    }
+
+    if (defined $curWord->{demos}) {
+        my $demo = $curWord->{demos}[$txt - 1];
+        if (defined $demo && defined $demo->[2]) {
+            my @trans = ($demo->[2]);
+            $curWord->{trans} = \@trans;
+            PrintWord($curWord);
+	}
+    }
+}
+
+sub HandleAddQuestion {
+    if (!defined $curWord) {
+        return;
+    }
+    my $txt = $curWord->{trans}[0];
+    if (defined $txt && !($txt =~ /$question$/)) {
+        my @trans = ("$txt$question");
+        $curWord->{trans} = \@trans;
+        PrintWord($curWord);
+    }
+}
+
 sub HandleRC {
     my $txt = shift @_;
     if (!defined $txt or $txt eq "") {
@@ -1192,6 +1274,13 @@ sub HandleAC {
     PrintWord($curWord);
 }
 
+sub HandleRepeat {
+    if (!defined $curWord) {
+        return;
+    }
+    LookWord($curWord->{w});
+}
+
 sub HandleDelete {
     my $txt = shift @_;
     my $word;
@@ -1210,6 +1299,9 @@ sub HandleDelete {
 }
 
 sub HandleTest {
+    if (!LockRwords) {
+        return;
+    }
     my $exam = CreateExam();
     if ($exam->{count} < 1) {
         print "The exam is empty.\n";
@@ -1372,6 +1464,9 @@ sub HandleCmd {
             Exit;
         }
     }
+    elsif ($cmd eq "r") {
+        HandleRepeat();
+    }
     elsif ($cmd eq "load") {
         HandleLoad(@args);
     }
@@ -1404,12 +1499,6 @@ sub HandleCmd {
     }
     elsif ($cmd eq "today") {
         HandleToday(@args);
-    }
-    elsif (defined $curExam && $cmd eq "gg") {
-        CheckExam('/gg');
-    }
-    elsif (defined $curExam && $cmd eq "cancel") {
-        undef $curExam;
     }
     elsif ($cmd eq "tt") {
         MakeTT();
@@ -1503,8 +1592,41 @@ while (1) {
         if ($cmd eq "") {
             next;
         }
+        elsif (defined $curExam) {
+            if ($cmd =~ /^\/([a-z]+)(.*)/) {
+                $cmd = $1;
+                my $args = $2;
+                $cmd =~ s/^\s+|\s+$//g;
+                if ($cmd eq "gg") {
+                    CheckExam('/gg');
+                }
+                elsif ($cmd eq "cancel") {
+                    CloseExam;
+                }
+            }
+            else {
+                CheckExam(NormWord($cmd));
+            }
+        }
         elsif ($cmd =~ /^\/\/(.*)/) {
             HandleSearchWord($1);
+        }
+	elsif ($cmd =~ /^\/ac (.+)/) {
+            $cmd = $1;
+            $cmd =~ s/^\s+|\s+$//g;
+            HandleAC($cmd);
+        }
+        elsif ($cmd =~ /^\/rc (.+)/) {
+            $cmd = $1;
+            $cmd =~ s/^\s+|\s+$//g;
+            HandleRC($cmd);
+        }
+        elsif ($cmd =~ /^\/([0-9]+)/) {
+            $cmd = $1;
+            HandleReplaceItem($cmd);
+        }
+        elsif ($cmd =~ /^\/\?/) {
+            HandleAddQuestion();
         }
         elsif ($cmd =~ /^\/([a-z]+)(.*)/) {
             $cmd = $1;
@@ -1513,23 +1635,11 @@ while (1) {
             $args =~ s/^\s+|\s+$//g;
             HandleCmd($cmd, $args);
         }
-        elsif (defined $curExam) {
-            CheckExam(NormWord($cmd));
-        }
         elsif (defined $curTT) {
             CheckTT($cmd);
         }
         else {
-            my $s = NormWord($cmd);
-            my $word = $dict{$s};
-            undef $curWord;
-            if (!defined $word) {
-                $word = LoadWord($s);
-            }
-            if ($word) {
-                PrintWord($word);
-                $curWord = $word;
-            }
+            LookWord($cmd);
         }
         $term->addhistory($cmd);
     }
