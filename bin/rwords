@@ -1574,7 +1574,7 @@ while (my ($k, $v) = each %testDB) {
 #}
 
 $pid = $$;
-$term = Term::ReadLine->new("rwords");
+$term = Term::ReadLine->new(0);
 
 while (1) {
     my $prompt = "> ";
