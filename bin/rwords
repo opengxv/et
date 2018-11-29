@@ -1071,8 +1071,13 @@ sub HandleSearch {
 
 sub HandleSave {
     if (defined $curWord) {
+    	if (!LockRwords) {
+	    undef;
+            return;
+    	}	
         SaveToDB($curWord);
         SaveSound($curWord);
+	UnlockRwords();
         print "Save '$curWord->{w}', id is '$curWord->{id}'.\n";
 
         my $tmp = $curWord;
@@ -1086,8 +1091,13 @@ sub HandleSave {
 sub HandleReplace {
     my $id = shift @_;
     if (defined $curWord) {
+    	if (!LockRwords) {
+	    undef;
+            return;
+    	}	
         SaveToDB($curWord);
         SaveSound($curWord);
+	UnlockRwords();
         HandleDelete($id);
         print "Save '$curWord->{w}', id is '$curWord->{id}'.\n";
 
@@ -1292,9 +1302,14 @@ sub HandleDelete {
         $word = $dict{$txt};
     }
     if ($word) {
+    	if (!LockRwords) {
+	    undef;
+            return;
+    	}	
         delete $dictDB{$word->{w}};
         delete $dict{$word->{w}};
         delete $wordList[$word->{id}];
+	UnlockRwords();
     }
 }
 
