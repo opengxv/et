@@ -1477,6 +1477,40 @@ sub HandleSearchWord {
     HandleLoad($txt);
 }
 
+sub HandleTouch {
+    my $txt = shift @_;
+    if (!defined $txt or $txt eq "") {
+        return;
+    }
+    my $word;
+    if ($txt =~ /[0-9]+/) {
+        $word = $wordList[$txt];
+    }
+    else {
+        $txt = NormWord($txt);
+        $word = $dict{$txt};
+    }
+    if (!defined $word) {
+        return;
+    }
+
+    if (!LockRwords) {
+        undef;
+        return;
+    }	
+
+    $word->{g} = 0;
+    $word->{r} = 0;
+    $word->{i} = 0;
+    $word->{e} = 2.5;
+    $word->{nt} = 0;
+    SaveGrade($word);
+
+    UnlockRwords();
+
+    HandlePrint($word->{id});
+}
+
 sub HandleCmd {
     my $cmd = shift @_;
     my $argstr = shift @_;
@@ -1621,6 +1655,7 @@ while (my ($k, $v) = each %testDB) {
 
 $pid = $$;
 $term = Term::ReadLine->new(0);
+binmode($term->IN, ':utf8');
 
 while (1) {
     my $prompt = "> ";
@@ -1632,6 +1667,7 @@ while (1) {
     }
     if (defined ($_ = $term->readline($prompt))) {
         my $cmd = $_;
+        my $orig = $cmd;
         $cmd = decode_utf8($cmd);
         $cmd =~ s/^\s+|\s+$//g;
 
@@ -1674,6 +1710,11 @@ while (1) {
         elsif ($cmd =~ /^\/\?/) {
             HandleAddQuestion();
         }
+        elsif ($cmd =~ /^\/touch (.*)/) {
+            $cmd = $1;
+            $cmd =~ s/^\s+|\s+$//g;
+            HandleTouch($cmd);
+        }
         elsif ($cmd =~ /^\/([a-z]+)(.*)/) {
             $cmd = $1;
             my $args = $2;
@@ -1687,7 +1728,7 @@ while (1) {
         else {
             LookWord($cmd);
         }
-        $term->addhistory($cmd);
+        $term->addhistory($orig);
     }
 }
 
